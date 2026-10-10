@@ -1,0 +1,18 @@
+config BR2_PACKAGE_CM762_WIFI
+	bool "UGREEN CM762 (AIC8800D80) Wi-Fi support"
+	depends on BR2_arm
+	depends on BR2_TOOLCHAIN_HAS_THREADS
+	default y
+	select BR2_PACKAGE_IW
+	select BR2_PACKAGE_KMOD
+	select BR2_PACKAGE_KMOD_TOOLS
+	select BR2_PACKAGE_USB_MODESWITCH
+	select BR2_PACKAGE_WIRELESS_REGDB
+	select BR2_PACKAGE_WPA_SUPPLICANT
+	select BR2_PACKAGE_WPA_SUPPLICANT_CLI
+	select BR2_PACKAGE_WPA_SUPPLICANT_NL80211
+	select BR2_PACKAGE_WPA_SUPPLICANT_PASSPHRASE
+	select BR2_PACKAGE_WPA_SUPPLICANT_WEXT
+	help
+	  Build and install the out-of-tree AIC8800D80 driver and firmware for
+	  the UGREEN AX900 (CM762) USB adapter, including USB mode switching.

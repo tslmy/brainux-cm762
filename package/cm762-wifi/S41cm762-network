@@ -1,0 +1,64 @@
+#!/bin/sh
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+export PATH
+
+NAME=cm762-network
+CONFIG=/etc/wpa_supplicant.conf
+PIDFILE=/var/run/$NAME.pid
+IFACEFILE=/var/run/$NAME.interface
+
+start() {
+	[ -s "$CONFIG" ] || return 0
+	# Buildroot ships a sample open-network stanza without an SSID; do not
+	# associate until the user has saved a real network configuration.
+	grep -q '^[[:space:]]*ssid=' "$CONFIG" || return 0
+	if [ -s "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+		return 0
+	fi
+
+	(
+		tries=0
+		while [ "$tries" -lt 60 ]; do
+			for net in /sys/class/net/*; do
+				[ -e "$net/phy80211" ] || continue
+				iface=${net##*/}
+				echo "$iface" > "$IFACEFILE"
+				wpa_supplicant -B -i "$iface" -c "$CONFIG" \
+					-P "/var/run/wpa_supplicant.$iface.pid" || exit 1
+				udhcpc -b -i "$iface" -p "/var/run/udhcpc.$iface.pid"
+				exit 0
+			done
+			sleep 1
+			tries=$((tries + 1))
+		done
+		echo "$NAME: no wireless interface appeared" >&2
+	) >/dev/null 2>&1 &
+	echo $! > "$PIDFILE"
+}
+
+stop() {
+	if [ -s "$PIDFILE" ]; then
+		kill "$(cat "$PIDFILE")" 2>/dev/null || true
+		rm -f "$PIDFILE"
+	fi
+	if [ -s "$IFACEFILE" ]; then
+		iface=$(cat "$IFACEFILE")
+		for pidfile in "/var/run/wpa_supplicant.$iface.pid" \
+				"/var/run/udhcpc.$iface.pid"; do
+			[ -s "$pidfile" ] || continue
+			kill "$(cat "$pidfile")" 2>/dev/null || true
+			rm -f "$pidfile"
+		done
+		rm -f "$IFACEFILE"
+	fi
+}
+
+case "$1" in
+	start) start ;;
+	stop) stop ;;
+	restart|reload) stop; start ;;
+	*) echo "Usage: $0 {start|stop|restart}" >&2; exit 1 ;;
+esac
+
+exit 0

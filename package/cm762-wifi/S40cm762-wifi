@@ -1,0 +1,49 @@
+#!/bin/sh
+
+PATH=/sbin:/usr/sbin:/bin:/usr/bin
+export PATH
+
+NAME=cm762-wifi
+PIDFILE=/var/run/$NAME.pid
+
+start() {
+	[ -x /sbin/modprobe ] || return 0
+	/sbin/modprobe aic_load_fw || echo "$NAME: could not load aic_load_fw" >&2
+	/sbin/modprobe aic8800_fdrv || echo "$NAME: could not load aic8800_fdrv" >&2
+
+	# Some CM762 units initially appear as a small virtual CD-ROM. Keep this
+	# lightweight watcher running so insertion after boot is handled too.
+	if [ -s "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+		return 0
+	fi
+	(
+		while :; do
+			for device in /sys/bus/usb/devices/*; do
+				[ -r "$device/idVendor" ] && [ -r "$device/idProduct" ] || continue
+				vendor=$(cat "$device/idVendor")
+				product=$(cat "$device/idProduct")
+				if [ "$vendor:$product" = "a69c:5723" ]; then
+					usb_modeswitch -KQ -v a69c -p 5723 >/dev/null 2>&1 || true
+				fi
+			done
+			sleep 5
+		done
+	) &
+	echo $! > "$PIDFILE"
+}
+
+stop() {
+	if [ -s "$PIDFILE" ]; then
+		kill "$(cat "$PIDFILE")" 2>/dev/null || true
+		rm -f "$PIDFILE"
+	fi
+}
+
+case "$1" in
+	start) start ;;
+	stop) stop ;;
+	restart|reload) stop; start ;;
+	*) echo "Usage: $0 {start|stop|restart}" >&2; exit 1 ;;
+esac
+
+exit 0
